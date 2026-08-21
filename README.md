@@ -32,6 +32,8 @@ Invalid JSON, non-object arguments, and non-tool-call blocks are left untouched.
 
 ## Install
 
+Published on npm. Install with:
+
 ```sh
 dsh plugin --profile <your-profile> add dsh-strip-sandbox-permissions
 ```
@@ -41,6 +43,17 @@ Restart DSH after installing. Verify:
 ```sh
 dsh plugin --profile <your-profile> list
 ```
+
+## Package / publish
+
+```sh
+npm pack          # produce dsh-strip-sandbox-permissions-<version>.tgz
+npm publish       # publish a new version to the npm registry
+```
+
+A granular access token with **Bypass 2FA** enabled and **Read and write**
+package access is required to publish; a token without bypass 2FA is rejected
+with a 403 even when otherwise valid.
 
 ## 中文说明
 
