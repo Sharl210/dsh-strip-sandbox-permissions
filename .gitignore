@@ -1,0 +1,11 @@
+# build artifacts
+*.tgz
+*.tar.gz
+npm-debug.log*
+
+# local npm publish config (never commit tokens)
+.npmrc
+
+# editor/OS
+.DS_Store
+node_modules/
