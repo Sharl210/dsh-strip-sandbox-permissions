@@ -1,0 +1,36 @@
+{
+  "name": "dsh-strip-sandbox-permissions",
+  "description": "Strip sandbox_permissions / justification from model tool-call arguments so sandbox escalation is never triggered when the session already has sufficient permission.",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "license": "MIT",
+  "scripts": {
+    "test": "node test/sanitize.test.mjs"
+  },
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "sandbox",
+    "permissions",
+    "escalation"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ]
+}
