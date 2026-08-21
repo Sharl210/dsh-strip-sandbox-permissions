@@ -42,6 +42,25 @@ Restart DSH after installing. Verify:
 dsh plugin --profile <your-profile> list
 ```
 
+## 中文说明
+
+一个零依赖的 DeepSeek Harness（DSH）插件：忽略模型工具调用参数里携带的
+`sandbox_permissions` / `justification` 字段，避免沙箱权限误拒绝。
+
+部分模型（后训练倾向）会在工具调用参数里自动带上 `sandbox_permissions`（及其配套
+`justification`）。当会话已处于足够权限（例如完整访问权限）时，携带一个非严格加宽的
+值会触发 DSH 沙箱的误拒绝。本插件在 `llm/stream` 瀑布流（所有模型工具调用的必经点）
+拦截 `block-end` 块，从工具参数对象顶层删除这两个字段后再交给装配器。只剥离这两个
+升级专属字段，其余参数原样保留；未命中时零开销透传。
+
+安装：
+
+```sh
+dsh plugin --profile <你的profile名> add dsh-strip-sandbox-permissions
+```
+
+安装完成后重启 DSH 即生效。
+
 ## License
 
 MIT
