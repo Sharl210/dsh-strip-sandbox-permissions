@@ -76,18 +76,47 @@ Any other or missing value falls back to the conservative `empty` mode.
 Every model tool call flows through the `llm/stream` waterfall (both the agent
 loop's `preparedCall.stream` and `llm.stream` route through
 `streamWithRegistration` → `ctx.waterfall(this, 'llm/stream', ...)`), so this is
-the single interception point that covers every adapter, including child agents
-running in-process. Adapters emit a `block-end` chunk carrying the fully
-assembled tool-call block at the end of the stream. This plugin rewrites that
-block: it parses the arguments object, deletes the offending top-level keys, and
-re-serializes. Session logs and replay both see the cleaned arguments, so
-nothing downstream disagrees.
+the single interception point covering every adapter that goes through the
+harness LLM runtime. The listener is registered with `global: true`, which skips
+Cordis' context filter so it also reaches child agents and other sub-contexts;
+without it a host-level listener could miss them. Adapters emit a `block-end`
+chunk carrying the assembled tool-call block at the end of the stream. This
+plugin rewrites that block: it parses the arguments object, deletes the
+offending top-level keys, and re-serializes.
 
 Only the keys listed above are touched; every other argument — and every other
 empty string anywhere in the object — is preserved verbatim. A new block is
 produced only when something was actually removed — otherwise the original block
 object is passed through unchanged (zero cost). Invalid JSON, non-object
 arguments, and non-tool-call blocks are left untouched.
+
+### What the rewrite covers, and what it does not
+
+These limits were verified against the running harness rather than assumed:
+
+- **The assembled tool call is cleaned.** What actually executes, and what the
+  durable `assistant/message` carries, uses the rewritten block. That is the part
+  that decides whether the call succeeds.
+- **Raw incremental deltas are not.** Adapters emit `tool-call-chunks` deltas
+  *before* `block-end`, and those pass through untouched, so a session log's
+  delta records still contain the original key. This was confirmed empirically: a
+  probe whose model output contained `"reasoning_effort":"high"` kept that text in
+  its delta records while its `block-end` came out clean. Rewriting deltas in
+  flight is not possible — a key can straddle a delta boundary. Tooling that
+  rebuilds a call from deltas may therefore still see the key.
+- **Only model-issued calls are seen.** In PTC mode (`tools` mode `ptc`/`both`), a
+  program inside `run_code` that calls a tool programmatically builds its
+  arguments in code and never produces a model `block-end`, so this plugin cannot
+  clean it. The gap is inert while `tools` mode is `native` (the default); it
+  becomes live if a deployment selects `ptc`/`both`. Method is `llm/stream` only.
+- **Escalation arguments have real meaning.** `sandbox_permissions` /
+  `justification` are legitimate optional arguments on the bash/fs/pwsh/run_code
+  tools, not pure noise. They are stripped unconditionally because the common
+  failure mode is a model attaching them out of habit and losing the call to a
+  "not strictly wider" rejection. In a genuinely *restricted* session this also
+  drops a deliberate, valid escalation request: the tool then runs under the
+  standing policy and may simply be denied. If a restricted deployment needs
+  model-driven escalation, do not install this plugin there as-is.
 
 ## Install
 
@@ -161,13 +190,31 @@ with a 403 even when otherwise valid.
 `empty` 是默认值，只删空值，非空的档位值视为真实路由意图原样保留；`always` 则不看值一律
 删除。填其它值或干脆不填，都会退回保守的 `empty`。
 
-**实现方式。** 所有模型工具调用都要经过 `llm/stream` 瀑布流，因此这是覆盖全部适配器
-的唯一拦截点，进程内运行的子代理同样覆盖。适配器在流末尾用 `block-end` 块携带组装完整
-的工具调用块，本插件解析其参数对象、从顶层删除需要清理的键、再序列化回去。会话日志和
-重放看到的都是清理后的参数，下游不会出现分歧。
+**实现方式。** 所有通过 harness LLM 运行时发起的模型工具调用都要经过 `llm/stream` 瀑布流，
+因此这是覆盖全部适配器的唯一拦截点。监听器以 `global: true` 注册，会跳过 Cordis 的上下文
+过滤，因此进程内运行的子代理、孙代理也能命中。适配器在流末尾用 `block-end` 块携带组装好的
+工具调用块，本插件解析其参数对象、从顶层删除需要清理的键、再序列化回去。
 
 只动上面列出的键，其余参数原样保留，对象里其它空字符串也不碰。只有在确实删掉了东西时
 才新建块，未命中时原对象零开销透传。非法 JSON、非对象参数、非工具调用块一律不动。
+
+**覆盖范围与已知边界**（以下均经真实运行时核验，不是推测）：
+
+- **被清理的是"组装完成的工具调用"。** 真正执行的那份、以及持久化的
+  `assistant/message` 里记录的那份，用的都是改写后的块——这决定了调用能否成功。
+- **原始增量 delta 不在清理范围内。** 适配器在 `block-end` **之前**就发出
+  `tool-call-chunks` 增量，这些原样透传，所以会话日志的 delta 记录里仍留有原始键。
+  这一点已实测确认：某次探针的模型输出含 `"reasoning_effort":"high"`，它的 delta 记录
+  保留了该文本，而同一调用的 `block-end` 出来是干净的。飞行中改写 delta 做不到——一个键
+  可能跨越两个 delta 的分片边界。因此**从 delta 重建调用的工具（重放类）仍可能看到该键**。
+- **只看得见模型发起的调用。** PTC 模式（`tools` 模式为 `ptc`/`both`）下，`run_code`
+  程序里以代码方式调用的工具，其参数在代码里构造、不产生模型 `block-end`，本插件看不到。
+  该缺口在 `tools` 模式为 `native`（默认值）时不触发；一旦部署选了 `ptc`/`both` 就会生效。
+- **升级类参数有真实语义。** `sandbox_permissions`／`justification` 在 bash／fs／pwsh／
+  run_code 上是合法的可选参数，并非纯噪声。本插件之所以无条件删除，是因为常见的故障形态是
+  模型出于习惯带上它们、结果因"并非严格更宽"被拒。但在**真正受限**的会话里，这也会一并
+  丢掉一次合法、刻意的提权请求：工具随后按原策略执行，可能直接被拒。若某个受限部署需要
+  模型主动提权，就不要原样安装本插件。
 
 **安装：**
 
