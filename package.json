@@ -1,7 +1,7 @@
 {
   "name": "dsh-strip-sandbox-permissions",
-  "description": "Strip sandbox_permissions / justification from model tool-call arguments so sandbox escalation is never triggered when the session already has sufficient permission.",
-  "version": "0.1.0",
+  "description": "Strip placeholder tool-call arguments that DSH rejects: sandbox_permissions / justification (false sandbox escalation) and empty reasoning_effort (rejected subagent delegation).",
+  "version": "0.2.0",
   "type": "module",
   "main": "lib/index.js",
   "license": "MIT",
@@ -15,7 +15,11 @@
     "dsh-plugin",
     "sandbox",
     "permissions",
-    "escalation"
+    "escalation",
+    "reasoning-effort",
+    "subagent",
+    "delegation",
+    "tool-call"
   ],
   "dsh": {
     "bundle": {
