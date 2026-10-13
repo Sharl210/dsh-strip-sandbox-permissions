@@ -1,7 +1,7 @@
 {
   "name": "dsh-strip-sandbox-permissions",
-  "description": "Strip placeholder tool-call arguments that DSH rejects: sandbox_permissions / justification (false sandbox escalation) and empty reasoning_effort (rejected subagent delegation).",
-  "version": "0.2.0",
+  "description": "Strip placeholder tool-call arguments that DSH rejects: sandbox_permissions / justification (false sandbox escalation) and reasoning_effort (rejected subagent delegation).",
+  "version": "0.3.0",
   "type": "module",
   "main": "lib/index.js",
   "license": "MIT",
